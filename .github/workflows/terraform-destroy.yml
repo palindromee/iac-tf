@@ -1,0 +1,156 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      confirm:
+        description: 'Type "destroy" to confirm'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate-input:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "❌ Confirmation failed. You must type 'destroy' to proceed."
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+
+  terraform-destroy:
+    needs: validate-input
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+          terraform_wrapper: false
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ 
+            github.event.inputs.environment == 'dev' && secrets.AWS_DEV_ROLE_ARN ||
+            github.event.inputs.environment == 'staging' && secrets.AWS_STAGING_ROLE_ARN ||
+            github.event.inputs.environment == 'prod' && secrets.AWS_PROD_ROLE_ARN
+          }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-TerraformDestroy-${{ github.event.inputs.environment }}
+
+      # Database Layer (destroy first - depends on app)
+      - name: Destroy Database Layer
+        id: db
+        run: |
+          cd environments/${{ github.event.inputs.environment }}/db
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ github.event.inputs.environment }}/db/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
+          
+          terraform plan -destroy \
+            -var-file="../terraform.tfvars" \
+            -out=destroy-plan
+          
+          terraform apply -auto-approve destroy-plan
+          echo "✅ Database layer destroyed"
+
+      # App Layer (destroy second - depends on alb)
+      - name: Destroy App Layer
+        id: app
+        if: always() && steps.db.conclusion != 'failure'
+        run: |
+          cd environments/${{ github.event.inputs.environment }}/app
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ github.event.inputs.environment }}/app/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
+          
+          terraform plan -destroy \
+            -var-file="../terraform.tfvars" \
+            -out=destroy-plan
+          
+          terraform apply -auto-approve destroy-plan
+          echo "✅ App layer destroyed"
+
+      # ALB Layer (destroy third - depends on vpc)
+      - name: Destroy ALB Layer
+        id: alb
+        if: always() && steps.app.conclusion != 'failure'
+        run: |
+          cd environments/${{ github.event.inputs.environment }}/alb
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ github.event.inputs.environment }}/alb/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
+          
+          terraform plan -destroy \
+            -var-file="../terraform.tfvars" \
+            -out=destroy-plan
+          
+          terraform apply -auto-approve destroy-plan
+          echo "✅ ALB layer destroyed"
+
+      # VPC Layer (destroy last - foundation layer)
+      - name: Destroy VPC Layer
+        id: vpc
+        if: always() && steps.alb.conclusion != 'failure'
+        run: |
+          cd environments/${{ github.event.inputs.environment }}/vpc
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ github.event.inputs.environment }}/vpc/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
+          
+          terraform plan -destroy \
+            -var-file="../terraform.tfvars" \
+            -out=destroy-plan
+          
+          terraform apply -auto-approve destroy-plan
+          echo "✅ VPC layer destroyed"
+      
+      - name: Generate Destruction Summary
+        if: always()
+        run: |
+          echo "## 🗑️ Terraform Destroy Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Layer Destruction Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Database | ${{ steps.db.outcome }} | PostgreSQL RDS Database |" >> $GITHUB_STEP_SUMMARY
+          echo "| App | ${{ steps.app.outcome }} | Application Auto Scaling Group |" >> $GITHUB_STEP_SUMMARY
+          echo "| ALB | ${{ steps.alb.outcome }} | Application Load Balancer |" >> $GITHUB_STEP_SUMMARY
+          echo "| VPC | ${{ steps.vpc.outcome }} | Network infrastructure foundation |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Destruction Order**: Database → App → ALB → VPC" >> $GITHUB_STEP_SUMMARY
+          echo "- **State Management**: Separate destruction per layer" >> $GITHUB_STEP_SUMMARY

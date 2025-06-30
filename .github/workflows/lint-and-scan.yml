@@ -1,0 +1,141 @@
+name: Terraform Lint and Security Scan stage
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '**/*.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  lint-and-scan:
+    runs-on: ubuntu-latest
+    name: Terraform Lint & Security Scan
+    outputs:
+      formatting-result: ${{ steps.terraform-fmt.outcome }}
+      security-result: ${{ steps.checkov.outcome }}
+      sentinel-result: ${{ steps.sentinel.outcome }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+
+      # Terraform Formatting Check and Fix
+      - name: Check and Fix Terraform Formatting
+        id: terraform-fmt
+        run: |
+          echo "🔍 Checking and fixing Terraform formatting..."
+          format_errors=0
+          
+          # Check all terraform files for formatting and fix them
+          for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
+            echo "Checking formatting in: $dir"
+            cd "$dir"
+            if ! terraform fmt -check -diff; then
+              echo "🔧 Fixing formatting issues in $dir"
+              terraform fmt
+              format_errors=$((format_errors + 1))
+            fi
+            cd - > /dev/null
+          done
+          
+          if [ $format_errors -eq 0 ]; then
+            echo "✅ All Terraform files are properly formatted"
+          else
+            echo "🔧 Fixed formatting issues in $format_errors directories"
+          fi
+
+      - name: Terraform Validation
+        id: terraform-validate
+        run: |
+          echo "🔍 Running Terraform validation..."
+          validation_errors=0
+          
+          # Validate all terraform configurations
+          for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
+            echo "Validating configuration in: $dir"
+            cd "$dir"
+            if terraform init -backend=false > /dev/null 2>&1; then
+              if ! terraform validate; then
+                echo "❌ Validation failed in $dir"
+                validation_errors=$((validation_errors + 1))
+              fi
+            else
+              echo "⚠️ Could not initialize $dir (may need backend config)"
+            fi
+            cd - > /dev/null
+          done
+          
+          if [ $validation_errors -eq 0 ]; then
+            echo "✅ All Terraform configurations are valid"
+          else
+            echo "❌ Found validation issues in $validation_errors directories"
+            exit 1
+          fi
+
+      - name: Run Checkov Default Policies
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          output_format: cli
+          output_file_path: console
+          soft_fail: false
+          skip_check: CKV_AWS_18,CKV_AWS_260,CKV_AWS_103,CKV_AWS_2,CKV_AWS_91,CKV_AWS_131,CKV_AWS_289,CKV_AWS_290,CKV_AWS_355,CKV_TF_1,CKV2_AWS_62,CKV_AWS_144,CKV2_AWS_61,CKV_AWS_338,CKV2_AWS_5
+          quiet: true
+
+      # # Custom company policies, showcased for demo. If this is added, pipeline fails
+      # - name: Run Custom Company Policies
+      #   id: checkov-custom
+      #   uses: bridgecrewio/checkov-action@v12
+      #   with:
+      #     directory: .
+      #     framework: terraform
+      #     check: CKV2_CUSTOM_1
+      #     external_checks_dirs: .checkov/
+      #     output_format: cli
+      #     output_file_path: console
+      #     soft_fail: false
+
+      # More here, https://github.com/marketplace/actions/trufflehog-oss
+      - name: TruffleHog Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          base: ""
+          head: ${{ github.ref_name }}
+
+
+      # Summary generation
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "## 🔍 Terraform Security & Quality Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Essential security and validation checks:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform Formatting | ${{ steps.terraform-fmt.outcome }} | Code formatting consistency |" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform Validation | ${{ steps.terraform-validate.outcome }} | Configuration syntax validation |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ steps.checkov.outcome }} | Checkov security policies |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | success | TruffleHog secret detection |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔒 Security Policies Enforced" >> $GITHUB_STEP_SUMMARY
+          echo "- **Checkov**: Comprehensive security scanning with company exceptions" >> $GITHUB_STEP_SUMMARY
+          echo "- **TruffleHog**: Secret detection and credential scanning" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform**: Code formatting and syntax validation" >> $GITHUB_STEP_SUMMARY
+

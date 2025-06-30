@@ -1,0 +1,14 @@
+---
+# Custom Terraform Checkov Policy for Company Compliance
+
+# Policy 1: All VPCs must have Location tag
+- metadata:
+    name: "VPC must have Location tag for geographic compliance"
+    id: "CKV2_CUSTOM_1"
+    category: "GENERAL_SECURITY"
+  definition:
+    cond_type: "attribute"
+    resource_types:
+      - "aws_vpc"
+    attribute: "tags.Location"
+    operator: "exists"

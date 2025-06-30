@@ -1,0 +1,84 @@
+name: Main CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '**/*.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '**/*.md'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment for deployment'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # Lint and Security Scan (always runs first)
+  lint-and-scan:
+    uses: ./.github/workflows/lint-and-scan.yml
+    secrets: inherit
+
+  deploy-dev:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'dev'))
+    needs: lint-and-scan
+    uses: ./.github/workflows/deploy-dev.yml
+    secrets: inherit
+
+  deploy-staging:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'staging'))
+    needs: [lint-and-scan, deploy-dev]
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit
+
+  # Production Environment (depends on staging success)
+  deploy-prod:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy-staging.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'prod'))
+    needs: [lint-and-scan, deploy-dev, deploy-staging]
+    uses: ./.github/workflows/deploy-prod.yml
+    secrets: inherit
+
+  deployment-summary:
+    if: always()
+    needs: [lint-and-scan, deploy-dev, deploy-staging, deploy-prod]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Deployment Summary
+        run: |
+          echo "## 🚀 Terraform Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint & Scan | ${{ needs.lint-and-scan.result }} | Security and code quality checks |" >> $GITHUB_STEP_SUMMARY
+          echo "| Development | ${{ needs.deploy-dev.result }} | Dev environment deployment |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging | ${{ needs.deploy-staging.result }} | Staging environment deployment |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production | ${{ needs.deploy-prod.result }} | Production environment deployment |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

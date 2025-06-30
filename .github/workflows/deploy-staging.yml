@@ -1,0 +1,209 @@
+name: Deploy Staging Environment
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENVIRONMENT: "staging"
+  AWS_REGION: "us-east-1"
+  TF_VERSION: "1.9.8"
+
+jobs:
+  deploy-staging-infrastructure:
+    runs-on: ubuntu-latest
+    environment: staging
+    name: Deploy Staging Infrastructure
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_STAGING_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-${{ env.ENVIRONMENT }}
+
+      - name: Verify State Bucket Access
+        run: |
+          echo "Verifying state bucket access..."
+          aws s3 ls s3://${{ secrets.TF_STATE_BUCKET }} || {
+            echo "Error: Cannot access state bucket ${{ secrets.TF_STATE_BUCKET }}"
+            exit 1
+          }
+
+      # VPC Layer
+      - name: Deploy VPC Layer
+        id: vpc
+        run: |
+          cd environments/${{ env.ENVIRONMENT }}/vpc
+          
+          # Initialize
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.ENVIRONMENT }}/vpc/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          
+          # Validation is handled by lint-and-scan workflow
+          
+          # Plan
+          set +e
+          terraform plan \
+            -var-file="../terraform.tfvars" \
+            -out=tfplan \
+            -detailed-exitcode
+          plan_exitcode=$?
+          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
+          
+          if [ $plan_exitcode -eq 1 ]; then
+            echo "VPC Terraform plan failed"
+            exit 1
+          elif [ $plan_exitcode -eq 0 ]; then
+            echo "VPC: No changes detected"
+          elif [ $plan_exitcode -eq 2 ]; then
+            echo "VPC: Changes detected, applying..."
+            terraform apply -auto-approve tfplan
+          fi
+
+      # ALB Layer (depends on VPC)
+      - name: Deploy ALB Layer
+        id: alb
+        if: always() && steps.vpc.conclusion != 'failure'
+        run: |
+          cd environments/${{ env.ENVIRONMENT }}/alb
+          
+          # Initialize
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.ENVIRONMENT }}/alb/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          
+          # Validation is handled by lint-and-scan workflow
+          
+          # Plan
+          set +e
+          terraform plan \
+            -var-file="../terraform.tfvars" \
+            -out=tfplan \
+            -detailed-exitcode
+          plan_exitcode=$?
+          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
+          
+          if [ $plan_exitcode -eq 1 ]; then
+            echo "ALB Terraform plan failed"
+            exit 1
+          elif [ $plan_exitcode -eq 0 ]; then
+            echo "ALB: No changes detected"
+          elif [ $plan_exitcode -eq 2 ]; then
+            echo "ALB: Changes detected, applying..."
+            terraform apply -auto-approve tfplan
+          fi
+
+      # App Layer (depends on ALB)
+      - name: Deploy App Layer
+        id: app
+        if: always() && steps.alb.conclusion != 'failure'
+        run: |
+          cd environments/${{ env.ENVIRONMENT }}/app
+          
+          # Initialize
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.ENVIRONMENT }}/app/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          
+          # Validation is handled by lint-and-scan workflow
+          
+          # Plan
+          set +e
+          terraform plan \
+            -var-file="../terraform.tfvars" \
+            -out=tfplan \
+            -detailed-exitcode
+          plan_exitcode=$?
+          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
+          
+          if [ $plan_exitcode -eq 1 ]; then
+            echo "App Terraform plan failed"
+            exit 1
+          elif [ $plan_exitcode -eq 0 ]; then
+            echo "App: No changes detected"
+          elif [ $plan_exitcode -eq 2 ]; then
+            echo "App: Changes detected, applying..."
+            terraform apply -auto-approve tfplan
+          fi
+
+      # Database Layer (depends on VPC and App for security group reference)
+      - name: Deploy Database Layer
+        id: db
+        if: always() && steps.app.conclusion != 'failure'
+        run: |
+          cd environments/${{ env.ENVIRONMENT }}/db
+          
+          # Initialize
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.ENVIRONMENT }}/db/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          
+          # Validation is handled by lint-and-scan workflow
+          
+          # Plan
+          set +e
+          terraform plan \
+            -var-file="../terraform.tfvars" \
+            -out=tfplan \
+            -detailed-exitcode
+          plan_exitcode=$?
+          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
+          
+          if [ $plan_exitcode -eq 1 ]; then
+            echo "Database Terraform plan failed"
+            exit 1
+          elif [ $plan_exitcode -eq 0 ]; then
+            echo "Database: No changes detected"
+          elif [ $plan_exitcode -eq 2 ]; then
+            echo "Database: Changes detected, applying..."
+            terraform apply -auto-approve tfplan
+          fi
+
+      # Deployment Summary
+      - name: Generate Deployment Summary
+        if: always()
+        run: |
+          echo "## 🚀 Staging Environment Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Layer Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Status | Changes | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| VPC | ${{ steps.vpc.outcome }} | ${{ steps.vpc.outputs.exitcode == '2' && 'Applied' || steps.vpc.outputs.exitcode == '0' && 'No Changes' || 'Failed' }} | Network infrastructure foundation |" >> $GITHUB_STEP_SUMMARY
+          echo "| ALB | ${{ steps.alb.outcome }} | ${{ steps.alb.outputs.exitcode == '2' && 'Applied' || steps.alb.outputs.exitcode == '0' && 'No Changes' || 'Failed' }} | Application Load Balancer |" >> $GITHUB_STEP_SUMMARY
+          echo "| App | ${{ steps.app.outcome }} | ${{ steps.app.outputs.exitcode == '2' && 'Applied' || steps.app.outputs.exitcode == '0' && 'No Changes' || 'Failed' }} | Application Auto Scaling Group |" >> $GITHUB_STEP_SUMMARY
+          echo "| Database | ${{ steps.db.outcome }} | ${{ steps.db.outputs.exitcode == '2' && 'Applied' || steps.db.outputs.exitcode == '0' && 'No Changes' || 'Failed' }} | PostgreSQL RDS Database |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform Version**: ${{ env.TF_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **State Backend**: S3 with native locking" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Infrastructure Stack" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Layered Architecture**: VPC → ALB → App → Database" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **State Isolation**: Separate state files per layer" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Dependency Management**: Cross-layer references via remote state" >> $GITHUB_STEP_SUMMARY
