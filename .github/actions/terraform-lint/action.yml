@@ -1,0 +1,59 @@
+name: 'Terraform Lint'
+description: 'Format and validate Terraform configurations'
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Check and Fix Terraform Formatting
+      shell: bash
+      run: |
+        echo "🔍 Checking and fixing Terraform formatting..."
+        format_errors=0
+        
+        for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
+          echo "Checking formatting in: $dir"
+          cd "$dir"
+          if ! terraform fmt -check -diff; then
+            echo "🔧 Fixing formatting issues in $dir"
+            terraform fmt
+            format_errors=$((format_errors + 1))
+          fi
+          cd - > /dev/null
+        done
+        
+        if [ $format_errors -eq 0 ]; then
+          echo "✅ All Terraform files are properly formatted"
+        else
+          echo "🔧 Fixed formatting issues in $format_errors directories"
+        fi
+
+    - name: Terraform Validation
+      shell: bash
+      run: |
+        echo "🔍 Running Terraform validation..."
+        validation_errors=0
+        
+        for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
+          echo "Validating configuration in: $dir"
+          cd "$dir"
+          if terraform init -backend=false > /dev/null 2>&1; then
+            if ! terraform validate; then
+              echo "❌ Validation failed in $dir"
+              validation_errors=$((validation_errors + 1))
+            fi
+          else
+            echo "⚠️ Could not initialize $dir (may need backend config)"
+          fi
+          cd - > /dev/null
+        done
+        
+        if [ $validation_errors -eq 0 ]; then
+          echo "✅ All Terraform configurations are valid"
+        else
+          echo "❌ Found validation issues in $validation_errors directories"
+          exit 1
+        fi

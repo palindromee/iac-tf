@@ -1,0 +1,56 @@
+name: 'Terraform Layer Deploy'
+description: 'Deploy a single Terraform layer with init, plan, and apply'
+inputs:
+  layer-path:
+    description: 'Path to the Terraform layer directory'
+    required: true
+  environment:
+    description: 'Environment name (dev, staging, prod)'
+    required: true
+  aws-region:
+    description: 'AWS region'
+    required: true
+  state-bucket:
+    description: 'S3 bucket for Terraform state'
+    required: true
+  layer-name:
+    description: 'Name of the layer for state key'
+    required: true
+outputs:
+  exitcode:
+    description: 'Terraform plan exit code'
+    value: ${{ steps.deploy.outputs.exitcode }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy Terraform Layer
+      id: deploy
+      shell: bash
+      run: |
+        cd ${{ inputs.layer-path }}
+        
+        # Initialize
+        terraform init \
+          -backend-config="bucket=${{ inputs.state-bucket }}" \
+          -backend-config="key=${{ inputs.environment }}/${{ inputs.layer-name }}/terraform.tfstate" \
+          -backend-config="region=${{ inputs.aws-region }}" \
+          -backend-config="encrypt=true"
+        
+        # Plan
+        set +e
+        terraform plan \
+          -var-file="../terraform.tfvars" \
+          -out=tfplan \
+          -detailed-exitcode
+        plan_exitcode=$?
+        echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
+        
+        if [ $plan_exitcode -eq 1 ]; then
+          echo "${{ inputs.layer-name }} Terraform plan failed"
+          exit 1
+        elif [ $plan_exitcode -eq 0 ]; then
+          echo "${{ inputs.layer-name }}: No changes detected"
+        elif [ $plan_exitcode -eq 2 ]; then
+          echo "${{ inputs.layer-name }}: Changes detected, applying..."
+          terraform apply -auto-approve tfplan
+        fi
