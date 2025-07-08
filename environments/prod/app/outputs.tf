@@ -1,6 +1,3 @@
-# Production App Layer Outputs
-
-# Pass through module outputs
 output "autoscaling_group_arn" {
   description = "ARN of the Auto Scaling Group"
   value       = module.app.autoscaling_group_arn

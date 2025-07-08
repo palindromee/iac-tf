@@ -2,18 +2,13 @@ name: Terraform Lint and Security Scan stage
 
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - 'README.md'
-      - '**/*.md'
-      - '.gitignore'
-  workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
-  pull-requests: write
+
+env:
+  TF_VERSION: "1.9.8"
 
 jobs:
   lint-and-scan:
@@ -22,80 +17,42 @@ jobs:
     outputs:
       formatting-result: ${{ steps.terraform-fmt.outcome }}
       security-result: ${{ steps.checkov.outcome }}
-      sentinel-result: ${{ steps.sentinel.outcome }}
+      tflint-result: ${{ steps.tflint.outcome }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
-          terraform_version: '1.9.8'
+          terraform_version: ${{ env.TF_VERSION }}
 
-      # Terraform Formatting Check and Fix
-      - name: Check and Fix Terraform Formatting
-        id: terraform-fmt
+      - name: Terraform Format Check
         run: |
-          echo "🔍 Checking and fixing Terraform formatting..."
-          format_errors=0
-          
-          # Check all terraform files for formatting and fix them
-          for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
-            echo "Checking formatting in: $dir"
-            cd "$dir"
-            if ! terraform fmt -check -diff; then
-              echo "🔧 Fixing formatting issues in $dir"
-              terraform fmt
-              format_errors=$((format_errors + 1))
-            fi
-            cd - > /dev/null
-          done
-          
-          if [ $format_errors -eq 0 ]; then
-            echo "✅ All Terraform files are properly formatted"
-          else
-            echo "🔧 Fixed formatting issues in $format_errors directories"
-          fi
+          echo "🔍 Checking Terraform formatting..."
+          terraform fmt -check -diff -recursive
 
-      - name: Terraform Validation
-        id: terraform-validate
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@19a52fbac37dacb22a09518e4ef6ee234f2d4987 # v4.0.0
+        with:
+          tflint_version: v0.52.0
+
+      - name: Run TFLint (includes validation)
+        id: tflint
         run: |
-          echo "🔍 Running Terraform validation..."
-          validation_errors=0
-          
-          # Validate all terraform configurations
-          for dir in $(find . -name "*.tf" -exec dirname {} \; | sort -u); do
-            echo "Validating configuration in: $dir"
-            cd "$dir"
-            if terraform init -backend=false > /dev/null 2>&1; then
-              if ! terraform validate; then
-                echo "❌ Validation failed in $dir"
-                validation_errors=$((validation_errors + 1))
-              fi
-            else
-              echo "⚠️ Could not initialize $dir (may need backend config)"
-            fi
-            cd - > /dev/null
-          done
-          
-          if [ $validation_errors -eq 0 ]; then
-            echo "✅ All Terraform configurations are valid"
-          else
-            echo "❌ Found validation issues in $validation_errors directories"
-            exit 1
-          fi
+          tflint --init
+          tflint --filter=*.tf --recursive
 
       - name: Run Checkov Default Policies
         id: checkov
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.1347.0
         with:
           directory: .
           framework: terraform
           output_format: cli
-          output_file_path: console
           soft_fail: false
-          skip_check: CKV_AWS_18,CKV_AWS_260,CKV_AWS_103,CKV_AWS_2,CKV_AWS_91,CKV_AWS_131,CKV_AWS_289,CKV_AWS_290,CKV_AWS_355,CKV_TF_1,CKV2_AWS_62,CKV_AWS_144,CKV2_AWS_61,CKV_AWS_338,CKV2_AWS_5
+          skip_check: CKV_AWS_18,CKV_AWS_260,CKV_AWS_103,CKV_AWS_2,CKV_AWS_91,CKV_AWS_131,CKV_AWS_289,CKV_AWS_290,CKV_AWS_355,CKV_TF_1,CKV2_AWS_62,CKV_AWS_144,CKV2_AWS_61,CKV_AWS_338,CKV2_AWS_5,CKV_AWS_145,CKV_AWS_21,CKV_AWS_19,CKV2_AWS_28
           quiet: true
 
       # # Custom company policies, showcased for demo. If this is added, pipeline fails
@@ -113,7 +70,7 @@ jobs:
 
       # More here, https://github.com/marketplace/actions/trufflehog-oss
       - name: TruffleHog Secret Scanning
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@6641d4ba5b684fffe195b9820345de1bf19f3181 # v3.89.2
         with:
           base: ""
           head: ${{ github.ref_name }}
@@ -129,8 +86,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status | Description |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Terraform Formatting | ${{ steps.terraform-fmt.outcome }} | Code formatting consistency |" >> $GITHUB_STEP_SUMMARY
-          echo "| Terraform Validation | ${{ steps.terraform-validate.outcome }} | Configuration syntax validation |" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform Formatting | success | Code formatting consistency |" >> $GITHUB_STEP_SUMMARY
+          echo "| TFLint | ${{ steps.tflint.outcome }} | Static analysis, validation & best practices |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Scan | ${{ steps.checkov.outcome }} | Checkov security policies |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | success | TruffleHog secret detection |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

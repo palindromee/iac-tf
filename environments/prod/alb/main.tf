@@ -1,5 +1,3 @@
-# Production ALB Layer
-
 terraform {
   required_version = ">= 1.5"
 
@@ -33,9 +31,6 @@ locals {
   })
 }
 
-# Data sources
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
 # Data source to get VPC layer outputs
 data "terraform_remote_state" "vpc" {

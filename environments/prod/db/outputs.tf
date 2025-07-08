@@ -1,6 +1,3 @@
-# Production Database Layer Outputs
-
-# Pass through module outputs
 output "db_instance_id" {
   description = "RDS instance ID"
   value       = module.db.db_instance_id

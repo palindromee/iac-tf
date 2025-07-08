@@ -1,6 +1,3 @@
-# Application Layer Outputs
-
-# Auto Scaling Group (from module)
 output "autoscaling_group_arn" {
   description = "ARN of the Auto Scaling Group"
   value       = module.autoscaling.autoscaling_group_arn
@@ -25,7 +22,6 @@ output "autoscaling_group_info" {
   }
 }
 
-# Launch Template (from module)
 output "launch_template_id" {
   description = "ID of the Launch Template"
   value       = module.autoscaling.launch_template_id
@@ -49,7 +45,6 @@ output "launch_template_info" {
   }
 }
 
-# Security Group
 output "security_group_id" {
   description = "ID of the app security group"
   value       = aws_security_group.app.id
@@ -71,7 +66,6 @@ output "security_group_info" {
   }
 }
 
-# IAM Resources
 output "iam_role_arn" {
   description = "ARN of the IAM role for app instances"
   value       = aws_iam_role.app_instance_role.arn
@@ -92,7 +86,6 @@ output "instance_profile_name" {
   value       = aws_iam_instance_profile.app_instance_profile.name
 }
 
-# CloudWatch Alarms
 output "cloudwatch_alarms" {
   description = "CloudWatch alarm information"
   value = {
@@ -103,7 +96,6 @@ output "cloudwatch_alarms" {
   }
 }
 
-# Auto Scaling Policies (from module)
 output "autoscaling_policies" {
   description = "Auto Scaling policy information"
   value = {
@@ -114,7 +106,6 @@ output "autoscaling_policies" {
   }
 }
 
-# Stack Information
 output "stack_name" {
   description = "Stack name for this layer"
   value       = "${var.project_name}-${var.environment}-app"
@@ -130,7 +121,6 @@ output "project_name" {
   value       = var.project_name
 }
 
-# For use by other layers
 output "app_layer_info" {
   description = "Information for consumption by other layers"
   value = {

@@ -1,6 +1,3 @@
-# Application Layer Variables
-# Following CFN template app.yaml structure
-
 variable "project_name" {
   description = "Project name for resource naming and tagging"
   type        = string
@@ -44,7 +41,6 @@ variable "common_tags" {
   default     = {}
 }
 
-# Application Configuration
 variable "app_config" {
   description = "Application layer configuration"
   type = object({
@@ -86,7 +82,6 @@ variable "app_config" {
   }
 }
 
-# Security Group Configuration
 variable "security_group_config" {
   description = "Security group configuration for app instances"
   type = object({

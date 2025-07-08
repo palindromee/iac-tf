@@ -22,7 +22,6 @@ provider "aws" {
   }
 }
 
-# KMS Key for encryption
 resource "aws_kms_key" "terraform_state" {
   description             = "KMS key for Terraform state encryption"
   deletion_window_in_days = 7
@@ -81,7 +80,6 @@ resource "aws_kms_alias" "terraform_state" {
   target_key_id = aws_kms_key.terraform_state.key_id
 }
 
-# S3 Bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {
   bucket = var.bucket_name
 
@@ -167,6 +165,5 @@ resource "aws_s3_bucket_policy" "terraform_state" {
 # S3 now supports native state locking as of provider version 5.42.0
 # Reference: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
 
-# Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}

@@ -1,7 +1,3 @@
-# ALB Module Outputs
-# Following Terraform best practices for structured output organization
-
-# Individual outputs for specific use cases
 output "alb_id" {
   description = "ID of the Application Load Balancer"
   value       = aws_lb.main.id
@@ -37,7 +33,6 @@ output "listener_arn" {
   value       = aws_lb_listener.main.arn
 }
 
-# Structured outputs for complex consumers
 output "alb_info" {
   description = "Comprehensive ALB information for cross-layer communication"
   value = {
@@ -90,7 +85,6 @@ output "listener_info" {
   }
 }
 
-# Computed values for App layer consumption
 output "app_layer_inputs" {
   description = "Pre-computed values for App layer module consumption"
   value = {
@@ -101,13 +95,11 @@ output "app_layer_inputs" {
   }
 }
 
-# Stack naming for cross-layer references
 output "stack_name" {
   description = "Stack name for cross-layer references"
   value       = "${var.project_name}-${var.environment}-alb"
 }
 
-# Common tags for consistency
 output "common_tags" {
   description = "Common tags applied to all ALB resources"
   value       = local.common_tags

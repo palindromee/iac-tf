@@ -22,7 +22,6 @@ provider "aws" {
   }
 }
 
-# GitHub OIDC Provider
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -36,7 +35,6 @@ resource "aws_iam_openid_connect_provider" "github" {
   }
 }
 
-# IAM Role for GitHub Actions
 resource "aws_iam_role" "github_actions" {
   name = "GitHubActionsRole-${var.environment}"
 
@@ -68,7 +66,6 @@ resource "aws_iam_role" "github_actions" {
   }
 }
 
-# IAM Policy for Terraform operations
 resource "aws_iam_policy" "terraform_operations" {
   name        = "TerraformOperations-${var.environment}"
   description = "Permissions for Terraform operations in ${var.environment} environment"
@@ -307,12 +304,10 @@ resource "aws_iam_policy" "terraform_operations" {
   })
 }
 
-# Attach policy to role
 resource "aws_iam_role_policy_attachment" "terraform_operations" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.terraform_operations.arn
 }
 
-# Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}

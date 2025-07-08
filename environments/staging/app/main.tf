@@ -1,5 +1,3 @@
-# Staging App Layer
-
 terraform {
   required_version = ">= 1.5"
 
@@ -32,9 +30,6 @@ locals {
   })
 }
 
-# Data sources for cross-layer dependencies
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
 # Get VPC information from remote state
 data "terraform_remote_state" "vpc" {

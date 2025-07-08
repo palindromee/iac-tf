@@ -1,6 +1,3 @@
-# Database Layer Variables
-# Following CFN template db.yaml structure
-
 variable "project_name" {
   description = "Project name for resource naming and tagging"
   type        = string
@@ -44,7 +41,6 @@ variable "common_tags" {
   default     = {}
 }
 
-# Database Configuration
 variable "database_config" {
   description = "Database configuration based on CFN template"
   type = object({
@@ -120,7 +116,6 @@ variable "database_config" {
   }
 }
 
-# Security Group Configuration
 variable "security_group_config" {
   description = "Security group configuration for RDS instance"
   type = object({

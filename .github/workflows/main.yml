@@ -7,59 +7,35 @@ on:
       - 'README.md'
       - '**/*.md'
       - '.gitignore'
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - 'README.md'
-      - '**/*.md'
-      - '.gitignore'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment for deployment'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - dev
-          - staging
-          - prod
+  workflow_dispatch: # Allows manual triggering of the pipeline for testing purposes
 
 permissions:
   id-token: write
   contents: read
-  pull-requests: write
-  security-events: write
+
+env:
+  TF_VERSION: "1.9.8"
 
 jobs:
-  # Lint and Security Scan (always runs first)
+  # Lint and Security Scan (runs first and must pass before any deployments occur)
   lint-and-scan:
     uses: ./.github/workflows/lint-and-scan.yml
-    secrets: inherit
+    permissions:
+      security-events: write
+      contents: read #  When job-level permission is mentioned, it overrides the top-level permissions completely, hence adding this again
 
   deploy-dev:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'dev'))
     needs: lint-and-scan
     uses: ./.github/workflows/deploy-dev.yml
     secrets: inherit
 
   deploy-staging:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy-dev.result == 'success') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'staging'))
-    needs: [lint-and-scan, deploy-dev]
+    needs: deploy-dev
     uses: ./.github/workflows/deploy-staging.yml
     secrets: inherit
 
-  # Production Environment (depends on staging success)
   deploy-prod:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy-staging.result == 'success') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'prod'))
-    needs: [lint-and-scan, deploy-dev, deploy-staging]
+    needs: deploy-staging
     uses: ./.github/workflows/deploy-prod.yml
     secrets: inherit
 

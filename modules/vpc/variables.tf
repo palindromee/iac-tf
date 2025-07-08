@@ -1,6 +1,3 @@
-# VPC Module Variables
-# Following Terraform best practices for variable definitions
-
 variable "project_name" {
   description = "Name of the project. Used for resource naming and tagging."
   type        = string

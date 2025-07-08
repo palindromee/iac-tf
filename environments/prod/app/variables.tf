@@ -1,6 +1,3 @@
-# Production App Layer Variables
-
-# Basic configuration
 variable "project_name" {
   description = "Project name for resource naming and tagging"
   type        = string
@@ -130,53 +127,3 @@ variable "security_group_config" {
   }
 }
 
-# Variables that exist in terraform.tfvars but not needed for App layer
-# These are declared to avoid warnings but not used in this layer
-
-variable "vpc_config" {
-  description = "VPC configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "subnet_config" {
-  description = "Subnet configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "nat_gateway_config" {
-  description = "NAT Gateway configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "flow_log_config" {
-  description = "Flow log configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "alb_config" {
-  description = "ALB configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "target_group_config" {
-  description = "Target group configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "listener_config" {
-  description = "Listener configuration (not used in App layer)"
-  type        = any
-  default     = null
-}
-
-variable "database_config" {
-  description = "Database configuration (not used in App layer)"
-  type        = any
-  default     = null
-}

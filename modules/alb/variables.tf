@@ -1,6 +1,3 @@
-# ALB Module Variables
-# Following Terraform best practices for complex object types and validation
-
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -67,7 +64,6 @@ variable "alb_config" {
     enable_cross_zone_load_balancing = optional(bool, true)
     idle_timeout                     = optional(number, 60)
 
-    # Access logs configuration
     access_logs = optional(object({
       enabled = optional(bool, false)
       bucket  = optional(string, "")
@@ -130,16 +126,6 @@ variable "target_group_config" {
       protocol            = "HTTP"
     })
 
-    # Stickiness configuration
-    stickiness = optional(object({
-      enabled         = optional(bool, false)
-      type            = optional(string, "lb_cookie")
-      cookie_duration = optional(number, 86400)
-      }), {
-      enabled         = false
-      type            = "lb_cookie"
-      cookie_duration = 86400
-    })
   })
 
   validation {
@@ -203,26 +189,13 @@ variable "listener_config" {
     protocol = optional(string, "HTTP")
 
     # SSL configuration for HTTPS listeners
-    ssl_policy      = optional(string, "ELBSecurityPolicy-TLS-1-2-2017-01")
+    ssl_policy      = optional(string, "ELBSecurityPolicy-2016-08")
     certificate_arn = optional(string, "")
 
     # Default action configuration
     default_action = optional(object({
       type = optional(string, "forward")
 
-      # Redirect action for HTTP to HTTPS
-      redirect = optional(object({
-        port        = optional(string, "443")
-        protocol    = optional(string, "HTTPS")
-        status_code = optional(string, "HTTP_301")
-      }), null)
-
-      # Fixed response action
-      fixed_response = optional(object({
-        content_type = optional(string, "text/plain")
-        message_body = optional(string, "")
-        status_code  = optional(string, "200")
-      }), null)
       }), {
       type = "forward"
     })
@@ -245,9 +218,9 @@ variable "listener_config" {
 
   validation {
     condition = contains([
-      "forward", "redirect", "fixed-response", "authenticate-cognito", "authenticate-oidc"
+      "forward", "authenticate-cognito", "authenticate-oidc"
     ], var.listener_config.default_action.type)
-    error_message = "Default action type must be forward, redirect, fixed-response, authenticate-cognito, or authenticate-oidc."
+    error_message = "Default action type must be forward, authenticate-cognito, or authenticate-oidc."
   }
 }
 
@@ -256,14 +229,13 @@ variable "security_group_config" {
   type = object({
     description = optional(string, "Security group for Application Load Balancer")
 
-    # Ingress rules
+    # Simple ingress rules - allow HTTP/HTTPS from internet
     ingress_rules = optional(list(object({
       description = string
       from_port   = number
       to_port     = number
       protocol    = string
-      cidr_blocks = optional(list(string), ["0.0.0.0/0"])
-      self        = optional(bool, false)
+      cidr_blocks = list(string)
       })), [
       {
         description = "HTTP"
@@ -271,7 +243,6 @@ variable "security_group_config" {
         to_port     = 80
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
-        self        = false
       },
       {
         description = "HTTPS"
@@ -279,26 +250,23 @@ variable "security_group_config" {
         to_port     = 443
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
-        self        = false
       }
     ])
 
-    # Egress rules
+    # Simple egress rules - allow all outbound
     egress_rules = optional(list(object({
       description = string
       from_port   = number
       to_port     = number
       protocol    = string
-      cidr_blocks = optional(list(string), ["0.0.0.0/0"])
-      self        = optional(bool, false)
+      cidr_blocks = list(string)
       })), [
       {
-        description = "All outbound traffic"
+        description = "All outbound"
         from_port   = 0
         to_port     = 0
         protocol    = "-1"
         cidr_blocks = ["0.0.0.0/0"]
-        self        = false
       }
     ])
   })

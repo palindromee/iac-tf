@@ -1,6 +1,3 @@
-# ALB Layer Outputs
-
-# Individual outputs for specific use cases
 output "alb_id" {
   description = "ID of the Application Load Balancer"
   value       = module.alb.alb_id

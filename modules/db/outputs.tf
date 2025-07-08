@@ -1,6 +1,3 @@
-# Database Layer Outputs
-
-# RDS Instance (from module)
 output "db_instance_id" {
   description = "RDS instance ID"
   value       = module.rds.db_instance_identifier
@@ -48,7 +45,6 @@ output "db_instance_info" {
   sensitive = true
 }
 
-# Security Group
 output "security_group_id" {
   description = "ID of the RDS security group"
   value       = aws_security_group.rds.id
@@ -70,7 +66,6 @@ output "security_group_info" {
   }
 }
 
-# DB Subnet Group (from module)
 output "db_subnet_group_name" {
   description = "DB subnet group name"
   value       = module.rds.db_subnet_group_id
@@ -90,7 +85,6 @@ output "db_subnet_group_info" {
   }
 }
 
-# Parameter Group (from module)
 output "db_parameter_group_name" {
   description = "DB parameter group name"
   value       = module.rds.db_parameter_group_id
@@ -101,7 +95,6 @@ output "db_parameter_group_arn" {
   value       = module.rds.db_parameter_group_arn
 }
 
-# KMS Key
 output "kms_key_id" {
   description = "KMS key ID for RDS encryption"
   value       = aws_kms_key.rds_encryption.key_id
@@ -117,7 +110,6 @@ output "kms_alias_name" {
   value       = aws_kms_alias.rds_encryption.name
 }
 
-# Secrets Manager (AWS Managed)
 output "secrets_manager_secret_arn" {
   description = "AWS managed secret ARN for database master password"
   value       = module.rds.db_instance_master_user_secret_arn
@@ -128,7 +120,6 @@ output "secrets_manager_secret_name" {
   value       = "rds-db-credentials/${module.rds.db_instance_resource_id}/masteruser"
 }
 
-# CloudWatch Logs
 output "cloudwatch_log_group_name" {
   description = "CloudWatch log group name for PostgreSQL logs"
   value       = aws_cloudwatch_log_group.postgresql.name
@@ -139,26 +130,19 @@ output "cloudwatch_log_group_arn" {
   value       = aws_cloudwatch_log_group.postgresql.arn
 }
 
-# CloudWatch Alarms
 output "cloudwatch_alarms" {
   description = "CloudWatch alarm information"
   value = {
-    cpu_alarm_arn          = aws_cloudwatch_metric_alarm.database_cpu.arn
-    connections_alarm_arn  = aws_cloudwatch_metric_alarm.database_connections.arn
-    memory_alarm_arn       = aws_cloudwatch_metric_alarm.database_freeable_memory.arn
-    cpu_alarm_name         = aws_cloudwatch_metric_alarm.database_cpu.alarm_name
-    connections_alarm_name = aws_cloudwatch_metric_alarm.database_connections.alarm_name
-    memory_alarm_name      = aws_cloudwatch_metric_alarm.database_freeable_memory.alarm_name
+    cpu_alarm_arn  = aws_cloudwatch_metric_alarm.database_cpu.arn
+    cpu_alarm_name = aws_cloudwatch_metric_alarm.database_cpu.alarm_name
   }
 }
 
-# Enhanced Monitoring Role (conditional)
 output "enhanced_monitoring_role_arn" {
   description = "Enhanced monitoring IAM role ARN (if enabled)"
-  value       = var.database_config.monitoring_interval > 0 ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
+  value       = null
 }
 
-# Database Connection Information (for application configuration)
 output "database_connection_info" {
   description = "Database connection information for applications"
   value = {
@@ -172,7 +156,6 @@ output "database_connection_info" {
   sensitive = true
 }
 
-# Stack Information
 output "stack_name" {
   description = "Stack name for this layer"
   value       = "${var.project_name}-${var.environment}-db"
@@ -188,7 +171,6 @@ output "project_name" {
   value       = var.project_name
 }
 
-# For use by other layers
 output "db_layer_info" {
   description = "Information for consumption by other layers"
   value = {

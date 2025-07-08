@@ -1,5 +1,3 @@
-# ALB Layer Variables - Production Environment
-
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -163,41 +161,3 @@ variable "security_group_config" {
   })
 }
 
-# Variables that exist in terraform.tfvars but not needed for ALB layer
-# These are declared to avoid warnings but not used in this layer
-
-variable "vpc_config" {
-  description = "VPC configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}
-
-variable "subnet_config" {
-  description = "Subnet configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}
-
-variable "nat_gateway_config" {
-  description = "NAT Gateway configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}
-
-variable "flow_log_config" {
-  description = "Flow log configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}
-
-variable "app_config" {
-  description = "Application configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}
-
-variable "database_config" {
-  description = "Database configuration (not used in ALB layer)"
-  type        = any
-  default     = null
-}

@@ -2,7 +2,6 @@ name: Deploy Production Environment
 
 on:
   workflow_call:
-  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -20,168 +19,53 @@ jobs:
     name: Deploy Production Infrastructure
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform Environment
+        uses: ./.github/actions/terraform-setup
         with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_PROD_ROLE_ARN }}
+          aws-role-arn: ${{ secrets.AWS_PROD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-${{ env.ENVIRONMENT }}
+          environment: ${{ env.ENVIRONMENT }}
+          state-bucket: ${{ secrets.TF_STATE_BUCKET }}
 
-      - name: Verify State Bucket Access
-        run: |
-          echo "Verifying state bucket access..."
-          aws s3 ls s3://${{ secrets.TF_STATE_BUCKET }} || {
-            echo "Error: Cannot access state bucket ${{ secrets.TF_STATE_BUCKET }}"
-            exit 1
-          }
-
-      # VPC Layer
       - name: Deploy VPC Layer
         id: vpc
-        run: |
-          cd environments/${{ env.ENVIRONMENT }}/vpc
-          
-          # Initialize
-          terraform init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.ENVIRONMENT }}/vpc/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-          
-          # Validation is handled by lint-and-scan workflow
-          
-          # Plan
-          set +e
-          terraform plan \
-            -var-file="../terraform.tfvars" \
-            -out=tfplan \
-            -detailed-exitcode
-          plan_exitcode=$?
-          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
-          
-          if [ $plan_exitcode -eq 1 ]; then
-            echo "VPC Terraform plan failed"
-            exit 1
-          elif [ $plan_exitcode -eq 0 ]; then
-            echo "VPC: No changes detected"
-          elif [ $plan_exitcode -eq 2 ]; then
-            echo "VPC: Changes detected, applying..."
-            terraform apply -auto-approve tfplan
-          fi
+        uses: ./.github/actions/terraform-layer-deploy
+        with:
+          layer-path: environments/${{ env.ENVIRONMENT }}/vpc
+          environment: ${{ env.ENVIRONMENT }}
+          aws-region: ${{ env.AWS_REGION }}
+          state-bucket: ${{ secrets.TF_STATE_BUCKET }}
+          layer-name: vpc
 
-      # ALB Layer (depends on VPC)
       - name: Deploy ALB Layer
         id: alb
-        if: always() && steps.vpc.conclusion != 'failure'
-        run: |
-          cd environments/${{ env.ENVIRONMENT }}/alb
-          
-          # Initialize
-          terraform init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.ENVIRONMENT }}/alb/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-          
-          # Validation is handled by lint-and-scan workflow
-          
-          # Plan
-          set +e
-          terraform plan \
-            -var-file="../terraform.tfvars" \
-            -out=tfplan \
-            -detailed-exitcode
-          plan_exitcode=$?
-          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
-          
-          if [ $plan_exitcode -eq 1 ]; then
-            echo "ALB Terraform plan failed"
-            exit 1
-          elif [ $plan_exitcode -eq 0 ]; then
-            echo "ALB: No changes detected"
-          elif [ $plan_exitcode -eq 2 ]; then
-            echo "ALB: Changes detected, applying..."
-            terraform apply -auto-approve tfplan
-          fi
+        uses: ./.github/actions/terraform-layer-deploy
+        with:
+          layer-path: environments/${{ env.ENVIRONMENT }}/alb
+          environment: ${{ env.ENVIRONMENT }}
+          aws-region: ${{ env.AWS_REGION }}
+          state-bucket: ${{ secrets.TF_STATE_BUCKET }}
+          layer-name: alb
 
-      # App Layer (depends on ALB)
       - name: Deploy App Layer
         id: app
-        if: always() && steps.alb.conclusion != 'failure'
-        run: |
-          cd environments/${{ env.ENVIRONMENT }}/app
-          
-          # Initialize
-          terraform init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.ENVIRONMENT }}/app/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-          
-          # Validation is handled by lint-and-scan workflow
-          
-          # Plan
-          set +e
-          terraform plan \
-            -var-file="../terraform.tfvars" \
-            -out=tfplan \
-            -detailed-exitcode
-          plan_exitcode=$?
-          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
-          
-          if [ $plan_exitcode -eq 1 ]; then
-            echo "App Terraform plan failed"
-            exit 1
-          elif [ $plan_exitcode -eq 0 ]; then
-            echo "App: No changes detected"
-          elif [ $plan_exitcode -eq 2 ]; then
-            echo "App: Changes detected, applying..."
-            terraform apply -auto-approve tfplan
-          fi
+        uses: ./.github/actions/terraform-layer-deploy
+        with:
+          layer-path: environments/${{ env.ENVIRONMENT }}/app
+          environment: ${{ env.ENVIRONMENT }}
+          aws-region: ${{ env.AWS_REGION }}
+          state-bucket: ${{ secrets.TF_STATE_BUCKET }}
+          layer-name: app
 
-      # Database Layer (depends on VPC and App for security group reference)
       - name: Deploy Database Layer
         id: db
-        if: always() && steps.app.conclusion != 'failure'
-        run: |
-          cd environments/${{ env.ENVIRONMENT }}/db
-          
-          # Initialize
-          terraform init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.ENVIRONMENT }}/db/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-          
-          # Validation is handled by lint-and-scan workflow
-          
-          # Plan
-          set +e
-          terraform plan \
-            -var-file="../terraform.tfvars" \
-            -out=tfplan \
-            -detailed-exitcode
-          plan_exitcode=$?
-          echo "exitcode=$plan_exitcode" >> $GITHUB_OUTPUT
-          
-          if [ $plan_exitcode -eq 1 ]; then
-            echo "Database Terraform plan failed"
-            exit 1
-          elif [ $plan_exitcode -eq 0 ]; then
-            echo "Database: No changes detected"
-          elif [ $plan_exitcode -eq 2 ]; then
-            echo "Database: Changes detected, applying..."
-            terraform apply -auto-approve tfplan
-          fi
+        uses: ./.github/actions/terraform-layer-deploy
+        with:
+          layer-path: environments/${{ env.ENVIRONMENT }}/db
+          environment: ${{ env.ENVIRONMENT }}
+          aws-region: ${{ env.AWS_REGION }}
+          state-bucket: ${{ secrets.TF_STATE_BUCKET }}
+          layer-name: db
 
       # Production-specific resource protection
       - name: Enable Resource Protection

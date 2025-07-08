@@ -1,7 +1,3 @@
-# VPC Module Outputs
-# Following Terraform best practices for output organization and naming
-
-# Core VPC Information
 output "vpc_id" {
   description = "ID of the VPC"
   value       = module.vpc.vpc_id
@@ -17,7 +13,6 @@ output "vpc_cidr_block" {
   value       = module.vpc.vpc_cidr_block
 }
 
-# Networking Components
 output "internet_gateway_id" {
   description = "ID of the Internet Gateway"
   value       = module.vpc.igw_id
@@ -28,7 +23,6 @@ output "internet_gateway_arn" {
   value       = module.vpc.igw_arn
 }
 
-# Subnet Information - grouped by type
 output "public_subnets" {
   description = "List of public subnet IDs"
   value       = module.vpc.public_subnets
@@ -69,7 +63,6 @@ output "database_subnet_group_name" {
   value       = module.vpc.database_subnet_group_name
 }
 
-# NAT Gateway Information
 output "nat_gateway_ids" {
   description = "List of NAT Gateway IDs"
   value       = module.vpc.natgw_ids
@@ -80,7 +73,6 @@ output "nat_public_ips" {
   value       = module.vpc.nat_public_ips
 }
 
-# Route Table Information
 output "public_route_table_ids" {
   description = "List of public route table IDs"
   value       = module.vpc.public_route_table_ids
@@ -96,13 +88,11 @@ output "database_route_table_ids" {
   value       = module.vpc.database_route_table_ids
 }
 
-# Availability Zone Information
 output "availability_zones" {
   description = "List of availability zones used by the VPC"
   value       = module.vpc.azs
 }
 
-# VPC Flow Logs
 output "vpc_flow_log_id" {
   description = "ID of the VPC Flow Log"
   value       = module.vpc.vpc_flow_log_id
@@ -133,7 +123,6 @@ output "vpc_flow_logs_kms_key_arn" {
   value       = var.flow_log_config.enabled ? aws_kms_key.vpc_flow_logs[0].arn : null
 }
 
-# Module Information
 output "name_prefix" {
   description = "Name prefix used for resource naming"
   value       = local.name_prefix
@@ -145,7 +134,6 @@ output "common_tags" {
   sensitive   = true
 }
 
-# Structured outputs for complex consumers
 output "network_info" {
   description = "Comprehensive network information"
   value = {
