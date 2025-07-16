@@ -178,8 +178,8 @@ database_config = {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   # Multi-AZ and performance
-  multi_az            = false
-  monitoring_interval = 0
+  multi_az                     = false
+  monitoring_interval          = 0
   performance_insights_enabled = false
 
   # Security
