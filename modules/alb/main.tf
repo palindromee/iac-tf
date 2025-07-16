@@ -1,4 +1,8 @@
 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 locals {
   # Resource naming convention
   name_prefix = "${var.project_name}-${var.environment}"
