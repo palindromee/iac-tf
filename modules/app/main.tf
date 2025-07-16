@@ -141,21 +141,6 @@ module "autoscaling" {
     }
   }
 
-  # Scaling policies
-  scaling_policies = {
-    scale_up = {
-      policy_type        = "StepScaling"
-      adjustment_type    = "ChangeInCapacity"
-      scaling_adjustment = 1
-      cooldown           = var.app_config.autoscaling.scale_up_cooldown
-    }
-    scale_down = {
-      policy_type        = "StepScaling"
-      adjustment_type    = "ChangeInCapacity"
-      scaling_adjustment = -1
-      cooldown           = var.app_config.autoscaling.scale_down_cooldown
-    }
-  }
 
   tags = local.common_tags
 }
