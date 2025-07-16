@@ -155,7 +155,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = var.app_config.autoscaling.scale_up_threshold
   alarm_description   = "This metric monitors ec2 cpu utilization for scale up"
-  alarm_actions       = [module.autoscaling.autoscaling_policy_arns["scale_up"]]
+  alarm_actions       = []
 
   dimensions = {
     AutoScalingGroupName = module.autoscaling.autoscaling_group_name
@@ -177,7 +177,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   statistic           = "Average"
   threshold           = var.app_config.autoscaling.scale_down_threshold
   alarm_description   = "This metric monitors ec2 cpu utilization for scale down"
-  alarm_actions       = [module.autoscaling.autoscaling_policy_arns["scale_down"]]
+  alarm_actions       = []
 
   dimensions = {
     AutoScalingGroupName = module.autoscaling.autoscaling_group_name

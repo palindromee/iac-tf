@@ -99,8 +99,6 @@ output "cloudwatch_alarms" {
 output "autoscaling_policies" {
   description = "Auto Scaling policy information"
   value = {
-    scale_up_policy_arn    = module.autoscaling.autoscaling_policy_arns["scale_up"]
-    scale_down_policy_arn  = module.autoscaling.autoscaling_policy_arns["scale_down"]
     scale_up_policy_name   = "${local.name_prefix}-app-scale-up"
     scale_down_policy_name = "${local.name_prefix}-app-scale-down"
   }
