@@ -180,6 +180,7 @@ database_config = {
   # Multi-AZ and performance
   multi_az            = false
   monitoring_interval = 0
+  performance_insights_enabled = false
 
   # Security
   deletion_protection   = false
